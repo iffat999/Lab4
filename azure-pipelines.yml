@@ -1,0 +1,51 @@
+trigger:
+  branches:
+    include:
+      - main  # Specify the branch to trigger the pipeline
+
+pool:
+  name: Default  # Use the default agent pool
+  demands:
+    - msbuild  # Ensure the agent has MSBuild capability
+    - visualstudio  # Ensure the agent has VisualStudio capability
+    - vstest  # Ensure the agent has VSTest capability
+
+steps:
+# Step 1: Install .NET SDK
+- task: UseDotNet@2
+  inputs:
+    packageType: 'sdk'
+    version: '8.x.x'  # Ensure this matches the version of .NET you're using
+    installationPath: $(Agent.ToolsDirectory)/dotnet
+
+# Step 2: Restore NuGet packages
+- task: DotNetCoreCLI@2  # Use DotNetCoreCLI task for restoring packages
+  inputs:
+    command: 'restore'
+    projects: '**/StringExtensions.csproj'  # Adjust this to the path of your .csproj file
+
+# Step 3: Build the project
+- task: DotNetCoreCLI@2
+  inputs:
+    command: 'build'
+    projects: '**/StringExtensions.csproj'  # Ensure the path is correct
+    configuration: 'Release'
+
+# Step 4: Pack the project (create the NuGet package)
+- task: DotNetCoreCLI@2
+  inputs:
+    command: 'pack'
+    projects: '**/StringExtensions.csproj'  # Ensure this path is correct
+    versioningScheme: 'off'
+    outputDir: '$(Build.ArtifactStagingDirectory)'  # Save the NuGet package to artifact staging directory
+
+# Step 5: Push the NuGet package to Azure Artifacts
+- task: NuGetCommand@2
+  inputs:
+    command: 'push'
+    packagesToPush: '$(Build.ArtifactStagingDirectory)/*.nupkg'  # Push the .nupkg file to the feed
+    nuGetFeedType: 'internal'
+    publishVstsFeed: 'isikder'  # Replace with your Azure Artifacts feed ID
+- task: VSBuild@1
+  inputs:
+    solution: '**\*.sln'
